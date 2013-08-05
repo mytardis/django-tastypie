@@ -716,7 +716,7 @@ class Resource(object):
         ``Resource._meta.object_class`` is created so that attempts to access
         ``bundle.obj`` do not fail.
         """
-        if obj is None:
+        if obj is None and self._meta.object_class:
             obj = self._meta.object_class()
 
         return Bundle(
@@ -1387,7 +1387,7 @@ class Resource(object):
         Return ``HttpNoContent`` (204 No Content) if
         ``Meta.always_return_data = False`` (default).
 
-        Return ``HttpAccepted`` (202 Accepted) if
+        Return ``HttpAccepted`` (200 OK) if
         ``Meta.always_return_data = True``.
         """
         if django.VERSION >= (1, 4):
@@ -1422,7 +1422,7 @@ class Resource(object):
             to_be_serialized = {}
             to_be_serialized[self._meta.collection_name] = [self.full_dehydrate(bundle, for_list=True) for bundle in bundles_seen]
             to_be_serialized = self.alter_list_data_to_serialize(request, to_be_serialized)
-            return self.create_response(request, to_be_serialized, response_class=http.HttpAccepted)
+            return self.create_response(request, to_be_serialized)
 
     def put_detail(self, request, **kwargs):
         """
@@ -1440,8 +1440,8 @@ class Resource(object):
         ``Meta.always_return_data = False`` (default), return ``HttpNoContent``
         (204 No Content).
         If an existing resource is modified and
-        ``Meta.always_return_data = True``, return ``HttpAccepted`` (202
-        Accepted).
+        ``Meta.always_return_data = True``, return ``HttpAccepted`` (200
+        OK).
         """
         if django.VERSION >= (1, 4):
             body = request.body
@@ -1459,7 +1459,7 @@ class Resource(object):
             else:
                 updated_bundle = self.full_dehydrate(updated_bundle)
                 updated_bundle = self.alter_detail_data_to_serialize(request, updated_bundle)
-                return self.create_response(request, updated_bundle, response_class=http.HttpAccepted)
+                return self.create_response(request, updated_bundle)
         except (NotFound, MultipleObjectsReturned):
             updated_bundle = self.obj_create(bundle=bundle, **self.remove_api_resource_names(kwargs))
             location = self.get_resource_uri(updated_bundle)
@@ -2147,7 +2147,6 @@ class ModelResource(Resource):
         for key, value in kwargs.items():
             setattr(bundle.obj, key, value)
 
-        self.authorized_create_detail(self.get_object_list(bundle.request), bundle)
         bundle = self.full_hydrate(bundle)
         return self.save(bundle)
 

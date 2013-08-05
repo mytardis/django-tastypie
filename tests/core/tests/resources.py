@@ -1242,9 +1242,21 @@ class CounterResource(ModelResource):
 
 
 class CounterAuthorization(Authorization):
+    def create_detail(self, object_list, bundle, *args, **kwargs):
+        bundle._create_auth_call_count = getattr(bundle, '_create_auth_call_count', 0) + 1
+        return True
+
     def update_detail(self, object_list, bundle, *args, **kwargs):
         bundle._update_auth_call_count = getattr(bundle, '_update_auth_call_count', 0) + 1
         return True
+
+
+class CounterCreateDetailResource(ModelResource):
+    count = fields.IntegerField('count', default=0, null=True)
+
+    class Meta:
+        queryset = Counter.objects.all()
+        authorization = CounterAuthorization()
 
 
 class CounterUpdateDetailResource(ModelResource):
@@ -2046,7 +2058,7 @@ class ModelResourceTestCase(TestCase):
 
         always_resource = AlwaysDataNoteResource()
         resp = always_resource.put_list(request)
-        self.assertEqual(resp.status_code, 202)
+        self.assertEqual(resp.status_code, 200)
         self.assertTrue(resp.content.startswith('{"objects": ['))
 
     def test_put_list_with_use_in(self):
@@ -2059,7 +2071,7 @@ class ModelResourceTestCase(TestCase):
 
         always_resource = AlwaysDataNoteResourceUseIn()
         resp = always_resource.put_list(request)
-        self.assertEqual(resp.status_code, 202)
+        self.assertEqual(resp.status_code, 200)
         content = json.loads(resp.content)
         self.assertTrue(len(content['objects']) == 1)
         for note in content['objects']:
@@ -2090,7 +2102,7 @@ class ModelResourceTestCase(TestCase):
 
         always_resource = AlwaysDataNoteResource()
         resp = always_resource.put_detail(request, pk=10)
-        self.assertEqual(resp.status_code, 202)
+        self.assertEqual(resp.status_code, 200)
         data = json.loads(resp.content)
         self.assertTrue("id" in data)
         self.assertEqual(data["id"], 10)
@@ -2129,7 +2141,7 @@ class ModelResourceTestCase(TestCase):
 
         always_resource = AlwaysDataNoteResourceUseIn()
         resp = always_resource.put_detail(request, pk=new_note.pk)
-        self.assertEqual(resp.status_code, 202)
+        self.assertEqual(resp.status_code, 200)
         data = json.loads(resp.content)
         self.assertTrue("id" in data)
         self.assertEqual(data["id"], new_note.pk)
@@ -2148,7 +2160,7 @@ class ModelResourceTestCase(TestCase):
         date_record_resource = DateRecordResource()
         resp = date_record_resource.put_detail(request, username="maraujop")
 
-        self.assertEqual(resp.status_code, 202)
+        self.assertEqual(resp.status_code, 200)
         data = json.loads(resp.content)
         self.assertEqual(data['username'], "MARAUJOP")
 
@@ -2160,7 +2172,7 @@ class ModelResourceTestCase(TestCase):
         date_record_resource = DateRecordResource()
         resp = date_record_resource.put_detail(request, date="2012-09-07")
 
-        self.assertEqual(resp.status_code, 202)
+        self.assertEqual(resp.status_code, 200)
         data = json.loads(resp.content)
         self.assertEqual(data['date'], "2012-09-07T00:00:00")
 
@@ -2171,7 +2183,7 @@ class ModelResourceTestCase(TestCase):
         date_record_resource = DateRecordResource()
         resp = date_record_resource.put_detail(request, message="HELLO")
 
-        self.assertEqual(resp.status_code, 202)
+        self.assertEqual(resp.status_code, 200)
         data = json.loads(resp.content)
         self.assertEqual(data['message'], "hello")
 
@@ -3005,6 +3017,18 @@ class ModelResourceTestCase(TestCase):
         latest = NoteWithEditor.objects.get(slug='note-with-editor')
         self.assertEqual(latest.editor.username, u'zeus')
 
+    def test_obj_create_full_hydrate_on_create_authorization(self):
+        cr = CounterCreateDetailResource()
+        counter_bundle = cr.build_bundle(data={
+            "name": "About",
+            "slug": "about",
+        }, obj=Counter())
+        cr.obj_create(counter_bundle)
+
+        self.assertEquals(counter_bundle._create_auth_call_count, 1)
+        self.assertEquals(counter_bundle.obj.name, "About")
+        self.assertEquals(counter_bundle.obj.slug, "about")
+
     def test_obj_update(self):
         self.assertEqual(Note.objects.all().count(), 6)
         note = NoteResource()
@@ -3776,3 +3800,20 @@ class BustedResourceTestCase(TestCase):
         self.request.method = 'POST'
         resp = self.resource.wrap_view('post_list')(self.request, pk=1)
         self.assertEqual(resp.status_code, 404)
+
+
+class ObjectlessResource(Resource):
+    test = fields.CharField(default='objectless_test')
+
+    class Meta:
+        resource_name = 'objectless'
+
+
+class ObjectlessResourceTestCase(TestCase):
+    def test_build_bundle(self):
+        resource = ObjectlessResource()
+
+        bundle = resource.build_bundle()
+
+        self.assertTrue(bundle is not None)
+
