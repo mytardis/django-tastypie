@@ -388,7 +388,7 @@ class Serializer(object):
         callback.
 
         Due to a difference between JSON and Javascript, two
-        newline characters, \u2028 and \u2029, need to be escaped.
+        newline characters, \\u2028 and \\u2029, need to be escaped.
         See http://timelessrepo.com/json-isnt-a-javascript-subset for
         details.
         """
